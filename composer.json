@@ -1,0 +1,30 @@
+{
+  "name": "php-enspired/molly",
+  "description": "Simple, flexible, and fun domain models.",
+  "type": "library",
+  "homepage": "http://php.enspi.red",
+  "license": "GPL-3.0 (only)",
+  "authors": [
+    {
+      "name": "Adrian",
+      "email": "adrian@enspi.red",
+      "homepage": "http://enspi.red"
+    }
+  ],
+  "support": {
+    "irc": "irc://irc.freenode.net/php-enspired"
+  },
+  "require": {
+    "php": "^7.0",
+    "php-enspired/exceptable": "^1.1",
+    "php-enspired/util": "dev-master as 0.1"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^5.7"
+  },
+  "autoload": {
+    "psr-4": {
+      "at\\molly\\": "src/"
+    }
+  }
+}
