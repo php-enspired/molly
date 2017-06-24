@@ -97,39 +97,19 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
    *
    * some models may not have such properties; an empty array must be returned in this case.
    *
+   * identifiable properties *must* be enumerable.
+   *
    * @return string[]  list of identifiable property names
    */
   public function getIdentifiableProperties() : array;
 
   /**
-   * lists readable properties.
-   *
-   * at a minimum, all enumberable properties must be readable.
-   * other literal or virtual properties may also be readable, depending on the implementation.
-   *
-   * @return string[]  list of readable property names
-   */
-  // @todo  is this needed? complicates implementation, and i'm not sure of any benefit.
-  //public function getReadableProperties() : array;
-
-  /**
-   * lists writable properties.
-   *
-   * writable properties, literal or virtual, can accept new values at runtime
-   * (subject to validation, of course).
-   * properties which can be "unset" (set to null/reset to a default value) are also considered writable.
-   *
-   * @return string[]  list of writable property names
-   */
-  // @todo  is this needed? complicates implementation, and i'm not sure of any benefit.
-  //public function getWritableProperties() : array;
-
-  /**
    * validates a value for a given offset (property).
    * this method is intended to compliment the ArrayAccess methods.
    *
-   * @param string $offset
-   * @param mixed  $value
+   * @param string $offset       offset (property) name to validate
+   * @param mixed  $value        value to validate against
+   * @throws ModelableException  if offset does not exist
    */
   public function offsetValid(string $offset, $value) : bool;
 }

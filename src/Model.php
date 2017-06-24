@@ -20,14 +20,18 @@ declare(strict_types = 1);
 
 namespace at\molly;
 
-use ArrayAccess;
-use Iterator;
-
-use at\molly\Modelable;
-
-use at\util\Jsonable;
-use at\util\Json;
-use at\util\Vars;
+use ArrayAccess,
+    Iterator;
+use at\molly\{
+    Modelable,
+    ModelableException
+  };
+use at\PRO\Regex;
+use at\util\{
+    Jsonable,
+    Json,
+    Vars
+  };
 
 /**
  * base class for domain models (data objects).
@@ -54,6 +58,9 @@ abstract class Model implements Modelable {
 
   /** @type string[]  list of literal property keys. */
   const VARS = [];
+
+  /** @type string[]  instance copy of list of enumerable keys. */
+  private $_ENUM = [];
 
   /**
    * @property mixed $...
@@ -130,7 +137,7 @@ abstract class Model implements Modelable {
     }
 
     foreach (static::KEYS as $key) {
-      if ($this->$key !== $other->$key) {
+      if ($this->_get($key) !== $other->_get($key)) {
         return false;
       }
     }
@@ -151,6 +158,32 @@ abstract class Model implements Modelable {
    */
   public function getIdentifiableProperties() : array {
     return static::KEYS;
+  }
+
+  /**
+   * gets a literal property value.
+   *
+   * this method is intended for internal use by the implementing class.
+   * it performs no validation and throws no errors.
+   *
+   * @param string $offset  name of property
+   * @return mixed          property value if exists; null otherwise
+   */
+  protected function _get(string $offset) {
+    return $this->$property ?? null;
+  }
+
+  /**
+   * sets a literal property value.
+   *
+   * this method is intended for internal use by the implementing class.
+   * it performs no validation and throws no errors.
+   *
+   * @param string $offset  name of property
+   * @param mixed  $value   value to set
+   */
+  protected function _set(string $offset, $value) {
+    $this->$property = $value;
   }
 
 
@@ -175,10 +208,10 @@ abstract class Model implements Modelable {
     }
 
     if (in_array($offset, static::ENUM)) {
-      return $this->$offset ?? null;
+      return $this->_get($offset);
     }
 
-    throw new ModelException(ModelException::NO_SUCH_PROPERTY);
+    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['offset' => $offset]);
   }
 
   /**
@@ -192,12 +225,12 @@ abstract class Model implements Modelable {
     }
 
     if (! $this->offsetValid($offset, $value)) {
-      throw new ModelException(
-        ModelException::INVALID_PROPERTY_VALUE,
+      throw new ModelableException(
+        ModelableException::INVALID_PROPERTY_VALUE,
         ['offset' => $offset, 'value' => $value]
       );
     }
-    $this->$offset = $value;
+    $this->_set($offset, $value);
   }
 
   /**
@@ -228,7 +261,11 @@ abstract class Model implements Modelable {
       return self::_validate($value, static::DEFS[$offset], $flag);
     }
 
-    return method_exists($this, "set{$offset}") || $this->offsetExists($offset);
+    if (method_exists($this, "set{$offset}") || $this->offsetExists($offset)) {
+      return true;
+    }
+
+    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['offset' => $offset]);
   }
 
 
@@ -239,7 +276,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.current
    */
   public function current() {
-    return $this->offsetGet(current(static::ENUM));
+    return $this->offsetGet(current($this->_ENUM));
   }
 
   /**
@@ -247,7 +284,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.key
    */
   public function key() {
-    return current(static::ENUM);
+    return current($this->_ENUM);
   }
 
   /**
@@ -255,7 +292,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.next
    */
   public function next() {
-    next(static::ENUM);
+    next($this->_ENUM);
   }
 
   /**
@@ -263,7 +300,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.rewind
    */
   public function rewind() {
-    reset(static::ENUM);
+    $this->_ENUM = static::ENUM;
   }
 
   /**
@@ -271,7 +308,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.valid
    */
   public function valid() : bool {
-    return key(static::ENUM) !== null;
+    return key($this->_ENUM) !== null;
   }
 
 
@@ -321,32 +358,26 @@ abstract class Model implements Modelable {
    * @see http://php.net/Serializable.serialize
    */
   public function serialize() {
-    return serialize(
-      array_intersect_key(
-        get_object_vars($this),
-        array_flip(static::VARS)
-      )
-    );
+    return serialize(array_map([$this, '_get'], static::VARS));
   }
 
   /**
    * {@inheritDoc}
    * @see http://php.net/Serializable.unserialize
    *
-   * note, because this method deals with literal properties,
-   * which may or may not normally be set directly, no validation is performed by default.
-   * implementations should override this method to provide such validation where desired.
-   *
    * @throws ModelException  if serialized data is invalid
    */
   public function unserialize($serialized) {
     $data = unserialize($serialized);
     if (array_keys($data) !== static::VARS) {
-      throw new ModelException(ModelException::INVALID_SERIALIZATION, ['serialized' => $serialized]);
+      throw new ModelableException(
+        ModelableException::INVALID_SERIALIZATION,
+        ['serialized' => $serialized]
+      );
     }
 
     foreach ($data as $property => $value) {
-      $this->$property = $value;
+      $this->_set($property, $value);
     }
   }
 }
