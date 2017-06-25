@@ -23,15 +23,15 @@ namespace at\molly;
 use ArrayAccess,
     Iterator;
 use at\molly\{
-    Modelable,
-    ModelableException
-  };
+      Modelable,
+      ModelableException
+    };
 use at\PRO\Regex;
 use at\util\{
-    Jsonable,
-    Json,
-    Vars
-  };
+      Jsonable,
+      Json,
+      Vars
+    };
 
 /**
  * base class for domain models (data objects).
@@ -47,7 +47,26 @@ use at\util\{
  */
 abstract class Model implements Modelable {
 
-  /** @type mixed[]  map of validation rules for properties (literal or virtual). */
+  /**
+   * @type mixed[]  map of validation rules for properties (literal or virtual).
+   *
+   * each property may have one or more rules to be validated by.  each rule may be:
+   *  - a callable: property value is valid if callable(value) is truthy.
+   *    also accepts arrays in the form [callable, ...args],
+   *    which are invoked like callable(value, ...args).
+   *  - an array: valid if value is found in the array.
+   *    comparison is strict; Modelables are compared using compare().
+   *  - a fully qualified classname: valid if value is an instance of the named class.
+   *  - a (psuedo)datatype: valid if value matches type. @see Vars::typeCheck().
+   *  - a regular expression: valid if the value is a string, and matches the pattern.
+   *    also accepts at\PRO\Regex objects.
+   *  - a boolean: valid if boolean is true.
+   *
+   * if a value passes all of its tests, it will be considered valid.
+   * note that these rules are only applied if no validator ("valid{property}" method) exists.
+   *
+   * if no validator or rules are defined, a property value is automatically considered valid.
+   */
   const DEFS = [];
 
   /** @type string[]  list of enumerable properties (literal or virtual). */
@@ -64,26 +83,54 @@ abstract class Model implements Modelable {
 
   /**
    * @property mixed $...
+   *
    * implementing classes should declare each of static::VARS as a private instance property.
+   */
+
+  /**
+   * @method mixed get...(void)
+   *
+   * getters compute virtual property values from one or more literal properties.
+   * this process *must* be deterministic.
+   *
+   * @return mixed  the property value
+   */
+
+  /**
+   * @method void set...(mixed $value)
+   *
+   * setters store values for both literal and virtual properties.
+   * note, setters may modify values depending on how they are stored/represented internally.
+   * in this sense, getters and setters exist independently.
+   *
+   * setters are also responsible for validating values before storing them,
+   * though this should not be done by the setter directly (use validator methods instead).
+   *
+   * @param mixed $value         the value to set
+   * @throws ModelableException  if the value fails validation
+   */
+
+  /**
+   * @method bool valid...(mixed $value)
+   *
+   * validators apply custom validation logic when rules in DEFS would not be sufficient.
+   *
+   * if a validator exists for a property, its DEFS are not applied automatically;
+   * the validator must do so explicitly if desired.
+   *
+   * @param mixed $value  the value to validate
+   * @return bool         true if value is valid; false otherwise
    */
 
   /**
    * checks a value against a one or more assertions.
    *
-   * if assertions is not an array, it is wrapped in (not cast to) one.
-   * the assertion is evaluated as follows (evaluation stops on first matching case):
-   *  - if callable, passes if callable(value) is truthy. also accepts [callable, ...args] arrays.
-   *  - if array, passes if value is found in the array.
-   *  - if string:
-   *    - passes if value is an instance of class {string}.
-   *    - passes if value is of (psuedo)datatype {string}.
-   *    - passes if value matches the regular expression ({string}).
-   *  - if boolean, passes if {boolean} is true.
-   *  - otherwise, fails.
+   * if the given rules are not an array, it is assumed to be a single rule.
+   * @see Model::DEFS for details on how rules are applied.
    *
-   * @param mixed         $value       subject value
-   * @param mixed|mixed[] $rules  the (set of) assertions to make
-   * @return bool                      true if all assertions pass; false otherwise
+   * @param mixed         $value  subject value
+   * @param mixed|mixed[] $rules  one or more rules to apply
+   * @return bool                 true if all rules are satisfied; false otherwise
    */
   private static function _validate($value, $rules) : bool {
     if (! is_array($rules)) {
@@ -110,10 +157,15 @@ abstract class Model implements Modelable {
         else { return false; }
       }
 
+      if ($rule instanceof Regex) {
+        if ($rule->matches($value)) { continue; }
+        else { return false; }
+      }
+
       if (is_string($rule)) {
         if (
           Vars::typeCheck($value, $rule) ||
-          (Regex::isValid($rule) && Regex::match($rule, $value))
+          (Regex::isValid($rule) && (new Regex($rule))->matches($value))
         ) { continue; }
         else { return false; }
       }
@@ -313,18 +365,6 @@ abstract class Model implements Modelable {
 
 
   # Jsonable
-
-  /**
-   * {@inheritDoc}
-   * @see Jsonable::fromArray()
-   */
-  public static function fromArray(array $data) : self {
-    $model = new static;
-    foreach ($data as $offset => $value) {
-      $model->offsetSet($offset, $value);
-    }
-    return $model;
-  }
 
   /**
    * {@inheritDoc}

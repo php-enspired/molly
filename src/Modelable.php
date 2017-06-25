@@ -32,12 +32,12 @@ use at\util\Jsonable;
  *
  * the goal is to provide a uniform api for access, validation, iteration, and serialization.
  *
- * implementing classes can define both "literal" (defined) and "virtual" (calculated) properties.
+ * implementing classes can define both "literal" (defined) and "virtual" (computed) properties.
  *
  * literal properties are actual values stored on the model.
  *
  * virtual properties can be accessed as if they are literal properties,
- * but their values are calculated from one or more literal properties.
+ * but their values are computed from one or more literal properties.
  * this calculation must be _deterministic_
  * (i.e., given the same literal properties, the same virtual property values will be returned).
  *
@@ -55,10 +55,9 @@ use at\util\Jsonable;
  * @method void   Iterator::rewind(void)
  * @method bool   Iterator::valid(void)
  *
- * @method Jsonable Jsonable::fromArray(array $data)
- * @method array    Jsonable::jsonSerialize(void)
- * @method array    Jsonable::toArray(void)
- * @method string   Jsonable::toJson(void)
+ * @method array  Jsonable::jsonSerialize(void)
+ * @method array  Jsonable::toArray(void)
+ * @method string Jsonable::toJson(void)
  *
  * @method string Serializable::serialize(void)
  * @method void   Serializable::serialize(string $serialized)
