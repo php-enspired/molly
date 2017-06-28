@@ -65,6 +65,17 @@ use at\util\Jsonable;
 interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
 
   /**
+   * indicates the internal state of a Modelable instance.
+   *
+   * @type int STATE_INCOMPLETE  the data is invalid; some property values are missing
+   * @type int STATE_INVALID     the data is invalid; some property values are invalid
+   * @type int STATE_VALID       the data is valid
+   */
+  const STATE_INCOMPLETE = 1;
+  const STATE_INVALID = (1<<1);
+  const STATE_VALID = (1<<2);
+
+  /**
    * checks whether another modelable instance represents the same unique model.
    *
    * this determiniation *must* be made based on the modelable's identifiable properties;
@@ -75,7 +86,7 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
    *
    * @return bool  true if given instance represents the same unique model; false otherwise
    */
-  public function compare(Modelable $other) : bool;
+  public function equals(Modelable $other) : bool;
 
   /**
    * lists enumerable properties.
@@ -103,12 +114,20 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
   public function getIdentifiableProperties() : array;
 
   /**
+   * gets the state of the modelable instance.
+   *
+   * @return int  one of the Modelable::STATE_* constants
+   */
+  public function getState() : int;
+
+  /**
    * validates a value for a given offset (property).
    * this method is intended to compliment the ArrayAccess methods.
    *
-   * @param string $offset       offset (property) name to validate
-   * @param mixed  $value        value to validate against
+   * @param string $offset       offset (property) name
+   * @param mixed  $value        value to validate
    * @throws ModelableException  if offset does not exist
+   * @return bool                true if value is valid; false otherwise
    */
   public function offsetValid(string $offset, $value) : bool;
 }

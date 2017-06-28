@@ -24,14 +24,14 @@ use at\exceptable\Exception as Exceptable;
 
 class ModelableException extends Exceptable {
 
-  /**
-   * @type int INVALID_PROPERTY_VALUE
-   * @type int INVALID_SERIALIZATION
-   * @type int NO_SUCH_PROPERTY
-   */
+  /** @type int  invalid property value. */
   const INVALID_PROPERTY_VALUE = 1;
-  const INVALID_SERIALIZATION = (1<<1);
-  const NO_SUCH_PROPERTY = (1<<2);
+
+  /** @type int  invalid serialization. */
+  const INVALID_SERIALIZATION = 2;
+
+  /** @type int  no such property. */
+  const NO_SUCH_PROPERTY = 3;
 
   /** {@inheritDoc} @see Exceptable::INFO */
   const INFO = [

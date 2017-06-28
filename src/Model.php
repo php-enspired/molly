@@ -20,8 +20,6 @@ declare(strict_types = 1);
 
 namespace at\molly;
 
-use ArrayAccess,
-    Iterator;
 use at\molly\{
       Modelable,
       ModelableException
@@ -48,7 +46,7 @@ use at\util\{
 abstract class Model implements Modelable {
 
   /**
-   * @type mixed[]  map of validation rules for properties (literal or virtual).
+   * @type mixed[]  map of validation rules for literal properties.
    *
    * each property may have one or more rules to be validated by.  each rule may be:
    *  - a callable: property value is valid if callable(value) is truthy.
@@ -72,14 +70,14 @@ abstract class Model implements Modelable {
   /** @type string[]  list of enumerable properties (literal or virtual). */
   const ENUM = [];
 
-  /** @type string[]  list of primary (identifiable) property keys. */
+  /** @type string[]  list of identifiable literal property keys. */
   const KEYS = [];
 
   /** @type string[]  list of literal property keys. */
   const VARS = [];
 
-  /** @type string[]  instance copy of list of enumerable keys. */
-  private $_ENUM = [];
+  /** @type string[]  instance copy of static::ENUM. */
+  private $_ENUM;
 
   /**
    * @property mixed $...
@@ -111,6 +109,14 @@ abstract class Model implements Modelable {
    */
 
   /**
+   * @method void unset...(void)
+   *
+   * unsetters restore values for both literal and virtual properties to an "empty"/"unset" state.
+   *
+   * @throws ModelableException  if the property cannot be unset
+   */
+
+  /**
    * @method bool valid...(mixed $value)
    *
    * validators apply custom validation logic when rules in DEFS would not be sufficient.
@@ -122,68 +128,12 @@ abstract class Model implements Modelable {
    * @return bool         true if value is valid; false otherwise
    */
 
-  /**
-   * checks a value against a one or more assertions.
-   *
-   * if the given rules are not an array, it is assumed to be a single rule.
-   * @see Model::DEFS for details on how rules are applied.
-   *
-   * @param mixed         $value  subject value
-   * @param mixed|mixed[] $rules  one or more rules to apply
-   * @return bool                 true if all rules are satisfied; false otherwise
-   */
-  private static function _validate($value, $rules) : bool {
-    if (! is_array($rules)) {
-      $rules = [$rules];
-    }
-
-    foreach ($rules as $rule) {
-
-      if (is_callable($rule)) {
-        if ($rule($value)) { continue; }
-        else { return false; }
-      }
-
-      if (is_array($rule)) {
-
-        if(is_callable($rule[0])) {
-          $args = $rule;
-          $rule = array_shift($args);
-          if ($rule($value, ...$args)) { continue; }
-          else { return false; }
-        }
-
-        if (in_array($value, $rule)) { continue; }
-        else { return false; }
-      }
-
-      if ($rule instanceof Regex) {
-        if ($rule->matches($value)) { continue; }
-        else { return false; }
-      }
-
-      if (is_string($rule)) {
-        if (
-          Vars::typeCheck($value, $rule) ||
-          (Regex::isValid($rule) && (new Regex($rule))->matches($value))
-        ) { continue; }
-        else { return false; }
-      }
-
-      if (is_bool($rule)) {
-        return $rule;
-      }
-
-      return false;
-    }
-    return true;
-  }
 
   /**
    * {@inheritDoc}
-   * @see Modelable::compare()
+   * @see Modelable::equals()
    */
-  public function compare(Modelable $other) : bool {
+  public function equals(Modelable $other) : bool {
     if (empty(static::KEYS) || ! $other instanceof $this) {
       return false;
     }
@@ -213,6 +163,22 @@ abstract class Model implements Modelable {
   }
 
   /**
+   * {@inheritDoc}
+   * @see Modelable::getState()
+   */
+  public function getState() : int {
+    foreach (static::VARS as $property) {
+      $value = $this->_get($property);
+      if (! $this->_valid($property, $value)) {
+        return ($value === null) ?
+          self::STATE_INCOMPLETE :
+          self::STATE_INVALID;
+      }
+    }
+    return self::STATE_VALID;
+  }
+
+  /**
    * gets a literal property value.
    *
    * this method is intended for internal use by the implementing class.
@@ -236,6 +202,63 @@ abstract class Model implements Modelable {
    */
   protected function _set(string $offset, $value) {
     $this->$property = $value;
+  }
+
+  /**
+   * validates a literal property value using rules found in static::DEFS array.
+   *
+   * this method is intended for internal use by the implementing class.
+   * if the rules for a given property is not an array, it is assumed to be a single rule.
+   * if no rules are declared for a given property, the value is considered valid.
+   *
+   * @see Model::DEFS for details on how rules are applied.
+   *
+   * @param string $offset  name of property
+   * @param mixed  $value   value to validate
+   * @return bool           true if value is valid; false otherwise
+   */
+  protected function _valid(string $offset, $value) : bool {
+    $rules = static::DEFS[$offset] ?? [];
+    if (! is_array($rules)) {
+      $rules = [$rules];
+    }
+
+    foreach ($rules as $rule) {
+
+      if (is_callable($rule)) {
+        if ($rule($value)) { continue; }
+      }
+
+      if (is_array($rule)) {
+        if(is_callable($rule[0])) {
+          $args = $rule;
+          $rule = array_shift($args);
+          if ($rule($value, ...$args)) { continue; }
+        }
+
+        if (in_array($value, $rule)) { continue; }
+      }
+
+      if (is_bool($rule)) {
+        return $rule;
+      }
+
+      if (is_string($rule)) {
+        if (Vars::typeCheck($value, $rule)) { continue; }
+        elseif (is_string($value)) {
+          try {
+            // @todo should we support $modifiers somehow?
+            //  `u` is implicit; can't imagine others would see much use.
+            if ((new Regex($rule))->matches($value)) { continue; }
+          } catch (\Throwable $e) {
+            // "not a regex" isn't a failure
+          }
+        }
+      }
+
+      return false;
+    }
+    return true;
   }
 
 
@@ -282,6 +305,7 @@ abstract class Model implements Modelable {
         ['offset' => $offset, 'value' => $value]
       );
     }
+
     $this->_set($offset, $value);
   }
 
@@ -290,6 +314,11 @@ abstract class Model implements Modelable {
    * @see http://php.net/ArrayAccess.offsetUnset
    */
   public function offsetUnset($offset) {
+    if (method_exists($this, "unset{$offset}")) {
+      $this->{"unset{$offset}"}();
+      return;
+    }
+
     $this->offsetSet($offset, null);
   }
 
@@ -298,23 +327,16 @@ abstract class Model implements Modelable {
    * @see Modelable::offsetValid()
    *
    * validation process is as follows:
-   *  - uses declared validation method (valid{property}())
-   *  - uses declared validation rules (static::DEFS[property])
-   *  - assumes value is valid if:
-   *    - a setter is declared (set{property}())
-   *    - offsetExists(property) returns true
+   *  - uses declared validator (valid{property}())
+   *  - uses declared validation rules (static::DEFS[property]) if property is enumerable or settable
    */
   public function offsetValid(string $offset, $value) : bool {
     if (method_exists($this, "valid{$offset}")) {
       return $this->{"valid{$offset}"}($value, $flags);
     }
 
-    if (isset(static::DEFS[$offset])) {
-      return self::_validate($value, static::DEFS[$offset], $flag);
-    }
-
-    if (method_exists($this, "set{$offset}") || $this->offsetExists($offset)) {
-      return true;
+    if (in_array($offset, static::ENUM) || method_exists($this, "set{$offset}")) {
+      return $this->_valid($offset, $value);
     }
 
     throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['offset' => $offset]);
@@ -352,7 +374,10 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.rewind
    */
   public function rewind() {
-    $this->_ENUM = static::ENUM;
+    if (! $this->_ENUM) {
+      $this->_ENUM = static::ENUM;
+    }
+    reset($this->_ENUM);
   }
 
   /**
