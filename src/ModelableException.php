@@ -25,29 +25,27 @@ use at\exceptable\Exception as Exceptable;
 class ModelableException extends Exceptable {
 
   /** @type int  invalid property value. */
-  const INVALID_PROPERTY_VALUE = 1;
+  const INVALID_PROPERTY_VALUE = 2;
 
   /** @type int  invalid serialization. */
-  const INVALID_SERIALIZATION = 2;
+  const INVALID_SERIALIZATION = 3;
 
   /** @type int  no such property. */
-  const NO_SUCH_PROPERTY = 3;
+  const NO_SUCH_PROPERTY = 4;
 
   /** {@inheritDoc} @see Exceptable::INFO */
   const INFO = [
     self::INVALID_PROPERTY_VALUE => [
       'message' => 'invalid property value',
-      'tr_message' => 'invalid value for "{offset}": {value}',
+      'tr_message' => 'invalid value for "{property}": {value}',
       'severity' => Exceptable::NOTICE
     ],
     self::INVALID_SERIALIZATION => [
-      'message' => 'invalid modelable serialization',
-      'severity' => Exceptable::ERROR
+      'message' => 'invalid modelable serialization'
     ],
     self::NO_SUCH_PROPERTY => [
       'message' => 'no such property',
-      'tr_message' => 'no modelable property "{offset}" exists',
-      'severity' => Exceptable::ERROR
+      'tr_message' => 'no modelable property "{property}" exists'
     ]
   ];
 }

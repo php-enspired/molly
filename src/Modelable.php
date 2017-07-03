@@ -95,7 +95,16 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
    *
    * @return string[]  list of enumerable property names
    */
-  public function getEnumerableProperties() : array;
+  public function enumerableProperties() : array;
+
+  /**
+   * gets the value of a readable property, i.e., one that is enumerable or has a getter method.
+   *
+   * @param string $property     name of the property to get
+   * @throws ModelableException  if the property is not readable or does not exist
+   * @return mixed               the property value
+   */
+  public function get(string $property);
 
   /**
    * lists identifiable properties.
@@ -111,23 +120,41 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
    *
    * @return string[]  list of identifiable property names
    */
-  public function getIdentifiableProperties() : array;
-
-  /**
-   * gets the state of the modelable instance.
-   *
-   * @return int  one of the Modelable::STATE_* constants
-   */
-  public function getState() : int;
+  public function identifiableProperties() : array;
 
   /**
    * validates a value for a given offset (property).
-   * this method is intended to compliment the ArrayAccess methods.
    *
-   * @param string $offset       offset (property) name
+   * @param string $property     offset (property) name
    * @param mixed  $value        value to validate
    * @throws ModelableException  if offset does not exist
    * @return bool                true if value is valid; false otherwise
    */
-  public function offsetValid(string $offset, $value) : bool;
+  public function isValid(string $property, $value) : bool;
+
+  /**
+   * sets the value of a writable property, i.e., one that has a setter or validator method.
+   *
+   * @param string $property     name of the property
+   * @param mixed  $value        the value to set
+   * @throws ModelableException  if the property is not writable or does not exist,
+   *                             or if the given value is not valid
+   */
+  public function set(string $property, $value);
+
+  /**
+   * gets the state of the modelable instance.
+   *
+   * @return int  bitmask of Modelable::STATE_* constants
+   */
+  public function state() : int;
+
+  /**
+   * unsets the value of an unsetable property,
+   * i.e., one that has an unsetter method or accepts null as a valid value.
+   *
+   * @param string $property     name of the property to unset
+   * @throws ModelableException  if the property is not unsetable or does not exist
+   */
+  public function unset(string $property);
 }

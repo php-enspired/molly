@@ -20,69 +20,73 @@ declare(strict_types = 1);
 
 namespace at\molly;
 
-use at\molly\{
-      Modelable,
-      ModelableException
-    };
-use at\PRO\Regex;
-use at\util\{
-      Jsonable,
-      Json,
-      Vars
-    };
+use at\molly\ {
+  Modelable,
+  ModelableException
+};
+use at\util\ {
+  Json,
+  Validator
+};
 
 /**
- * base class for domain models (data objects).
+ * declarative domain models (data objects).
  *
- * most characteristics of the model are defined via four class constants:
- *  - VARS: names of literal properties.
- *  - KEYS: names of primary (identifiable) properties.
- *    objects with the same key values will be considered identical.
- *    if omitted, instances will be considered distinct, even if all property values are the same.
- *  - ENUM: names of literal and/or virtual properties which are _enumerable_
- *    (e.g., will be included when iterated over).
- *  - DEFS: rules for validating properties against.  @see Modelable::_validate().
+ * implementations declare the Model's schema and validation rules as class constants,
+ * allowing most of the modelable logic to be handled by the base class.
+ * in the simplest case, a child class can define a list of property names, and be done.
+ *
+ * the concept of "virtual" (computed) properties is also supported,
+ * allowing the implementation to expose different "views" on the "literal" ("real") properties.
+ * both literal and virtual properties may be enumerable, readable, writable, and/or validatable.
  */
-abstract class Model implements Modelable {
+abstract class DeclarableModel implements Modelable {
 
   /**
-   * @type mixed[]  map of validation rules for literal properties.
+   * @type string[]  list of enumerable properties.
    *
-   * each property may have one or more rules to be validated by.  each rule may be:
-   *  - a callable: property value is valid if callable(value) is truthy.
-   *    also accepts arrays in the form [callable, ...args],
-   *    which are invoked like callable(value, ...args).
-   *  - an array: valid if value is found in the array.
-   *    comparison is strict; Modelables are compared using compare().
-   *  - a fully qualified classname: valid if value is an instance of the named class.
-   *  - a (psuedo)datatype: valid if value matches type. @see Vars::typeCheck().
-   *  - a regular expression: valid if the value is a string, and matches the pattern.
-   *    also accepts at\PRO\Regex objects.
-   *  - a boolean: valid if boolean is true.
-   *
-   * if a value passes all of its tests, it will be considered valid.
-   * note that these rules are only applied if no validator ("valid{property}" method) exists.
-   *
-   * if no validator or rules are defined, a property value is automatically considered valid.
+   * enumerable properties may be literal or virtual.
+   * if ENUMS are not defined, NAMES will be enumerable.
    */
-  const DEFS = [];
-
-  /** @type string[]  list of enumerable properties (literal or virtual). */
-  const ENUM = [];
+  const ENUMS = null;
 
   /** @type string[]  list of identifiable literal property keys. */
   const KEYS = [];
 
-  /** @type string[]  list of literal property keys. */
-  const VARS = [];
+  /**
+   * @type array[]  map of validation rules for literal properties.
+   *
+   * each literal property may have one or more rules to be validated by.
+   * rules may be defined as follows:
+   *  - a callable, or [callable, ...args] array. passes if callable(value, ...args) is truthy.
+   *  - an array of values. passes if the value is present in the array.
+   *  - a fully qualified classname. passes if the value is an instance of that class.
+   *  - a data type or pseudotype. passes if the value is of that type.
+   *  - @todo a regex.
+   *  - @todo a FILTER_* constant.
+   *  - a boolean. true always passes; false always fails.
+   *
+   * if all rules return truthy, the value will be considered valid.
+   * if no validator or rules are defined, a property value is automatically considered valid.
+   *
+   * note that these rules are only applied if no validator ("valid{property}" method) exists.
+   */
+  const RULES = [];
 
-  /** @type string[]  instance copy of static::ENUM. */
-  private $_ENUM;
+  /**
+   * @type string[]  list of literal property keys.
+   *
+   * the implementing class *must* define names. the class will break otherwise.
+   */
+  const NAMES = null;
+
+  /** @type string[]  instance copy of enumberable property keys. */
+  private $_ENUMS;
 
   /**
    * @property mixed $...
    *
-   * implementing classes should declare each of static::VARS as a private instance property.
+   * implementing classes should declare each of static::NAMES as a nonpublic instance property.
    */
 
   /**
@@ -131,6 +135,14 @@ abstract class Model implements Modelable {
 
   /**
    * {@inheritDoc}
+   * @see Modelable::enumerableProperties()
+   */
+  public function enumerableProperties() : array {
+    return static::ENUMS ?? static::NAMES;
+  }
+
+  /**
+   * {@inheritDoc}
    * @see Modelable::equals()
    */
   public function equals(Modelable $other) : bool {
@@ -148,34 +160,126 @@ abstract class Model implements Modelable {
 
   /**
    * {@inheritDoc}
-   * @see Modelable::getEnumerableProperties()
+   * @see Modelable::get()
    */
-  public function getEnumerableProperties() : array {
-    return static::ENUM;
+  public function get(string $property) {
+    if (method_exists($this, "get{$property}")) {
+      return $this->{"get{$property}"}();
+    }
+
+   if (in_array($property, static::ENUMS ?? static::NAMES)) {
+      return $this->_get($property);
+    }
+
+    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['property' => $property]);
   }
 
   /**
    * {@inheritDoc}
-   * @see Modelable::getIdentifiableProperties()
+   * @see Modelable::identifiableProperties()
    */
-  public function getIdentifiableProperties() : array {
+  public function identifiableProperties() : array {
     return static::KEYS;
   }
 
   /**
-   * {@inheritDoc}
-   * @see Modelable::getState()
+   * convenience method for checking Modelable state.
+   *
+   * @return bool  true if Modelable is in an incomplete state; false otherwise
    */
-  public function getState() : int {
-    foreach (static::VARS as $property) {
+  public function isStateIncomplete() : bool {
+    return $this->state() & Modelable::STATE_INCOMPLETE === Modelable::STATE_INCOMPLETE;
+  }
+
+  /**
+   * convenience method for checking Modelable state.
+   *
+   * @return bool  true if Modelable is in an invalid state; false otherwise
+   */
+  public function isStateInvalid() : bool {
+    return $this->state() & Modelable::STATE_INVALID === Modelable::STATE_INVALID;
+  }
+
+  /**
+   * convenience method for checking Modelable state.
+   *
+   * @return bool  true if Modelable is in a valid state; false otherwise
+   */
+  public function isStateValid() : bool {
+    return $this->state() & Modelable::STATE_VALID === Modelable::STATE_VALID;
+  }
+
+  /**
+   * {@inheritDoc}
+   * @see Modelable::isValid()
+   *
+   * validation process is as follows:
+   *  - uses declared validator (valid{property}())
+   *  - uses declared validation rules (static::DEFS[property]) if property is enumerable or settable
+   */
+  public function isValid(string $property, $value) : bool {
+    if (method_exists($this, "isValid{$property}")) {
+      return $this->{"isValid{$property}"}($value, $flags);
+    }
+
+    if (
+      in_array($property, static::ENUMS ?? static::NAMES) ||
+      method_exists($this, "set{$property}")
+    ) {
+      return $this->_isValid($property, $value);
+    }
+
+    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['property' => $property]);
+  }
+
+  /**
+   * {@inheritDoc}
+   * @see Modelable::set()
+   */
+  public function set(string $property, $value) {
+    if (method_exists($this, "set{$property}")) {
+      $this->{"set{$property}"}($value);
+      return;
+    }
+
+    if (! $this->offsetValid($property, $value)) {
+      throw new ModelableException(
+        ModelableException::INVALID_PROPERTY_VALUE,
+        ['property' => $property, 'value' => $value]
+      );
+    }
+
+    $this->_set($property, $value);
+  }
+
+  /**
+   * {@inheritDoc}
+   * @see Modelable::state()
+   */
+  public function state() : int {
+    $state = 0;
+    foreach (static::NAMES as $property) {
       $value = $this->_get($property);
       if (! $this->_valid($property, $value)) {
-        return ($value === null) ?
+        $state |= ($value === null) ?
           self::STATE_INCOMPLETE :
           self::STATE_INVALID;
       }
     }
-    return self::STATE_VALID;
+    return $state ?: self::STATE_VALID;
+  }
+
+  /**
+   * {@inheritDoc}
+   * @see Modelable::unset()
+   */
+  public function unset(string $property) {
+    if (method_exists($this, "unset{$property}")) {
+      $this->{"unset{$property}"}();
+      return;
+    }
+
+    $this->offsetSet($property, null);
   }
 
   /**
@@ -184,10 +288,10 @@ abstract class Model implements Modelable {
    * this method is intended for internal use by the implementing class.
    * it performs no validation and throws no errors.
    *
-   * @param string $offset  name of property
+   * @param string $property  name of property
    * @return mixed          property value if exists; null otherwise
    */
-  protected function _get(string $offset) {
+  protected function _get(string $property) {
     return $this->$property ?? null;
   }
 
@@ -197,10 +301,10 @@ abstract class Model implements Modelable {
    * this method is intended for internal use by the implementing class.
    * it performs no validation and throws no errors.
    *
-   * @param string $offset  name of property
+   * @param string $property  name of property
    * @param mixed  $value   value to set
    */
-  protected function _set(string $offset, $value) {
+  protected function _set(string $property, $value) {
     $this->$property = $value;
   }
 
@@ -208,57 +312,52 @@ abstract class Model implements Modelable {
    * validates a literal property value using rules found in static::DEFS array.
    *
    * this method is intended for internal use by the implementing class.
-   * if the rules for a given property is not an array, it is assumed to be a single rule.
+   * all rules must pass for the value to be considered valid.
    * if no rules are declared for a given property, the value is considered valid.
    *
-   * @see Model::DEFS for details on how rules are applied.
+   * @see Model::RULES for details on how rules are defined.
    *
-   * @param string $offset  name of property
+   * @param string $property  name of property
    * @param mixed  $value   value to validate
    * @return bool           true if value is valid; false otherwise
    */
-  protected function _valid(string $offset, $value) : bool {
-    $rules = static::DEFS[$offset] ?? [];
-    if (! is_array($rules)) {
-      $rules = [$rules];
-    }
+  protected function _isValid(string $property, $value) : bool {
+    $rules = [];
+    foreach (static::RULES ?? [] as $definition) {
 
-    foreach ($rules as $rule) {
-
-      if (is_callable($rule)) {
-        if ($rule($value)) { continue; }
+      // shorthand: callable with only value arg
+      if (is_callable($definition)) {
+        $rules[] = [$definition, $value];
+        continue;
       }
 
-      if (is_array($rule)) {
-        if(is_callable($rule[0])) {
-          $args = $rule;
-          $rule = array_shift($args);
-          if ($rule($value, ...$args)) { continue; }
+      // shorthand: instanceof / type / pseudotype hint
+      if (is_string($definition)) {
+        $rules[] = [Validator::TYPE, $value, $definition];
+        continue;
+      }
+
+      if (is_array($definition)) {
+        // shorthand: callable with additional args
+        if (is_callable(reset($definition))) {
+          $rules[] = array_splice($definition, 1, 0, [$value]);
+          continue;
         }
 
-        if (in_array($value, $rule)) { continue; }
+        // shorthand: whitelist
+        $rules[] = [Validator::ONE_OF, $value, $definition];
+        continue;
       }
 
-      if (is_bool($rule)) {
-        return $rule;
+      // shorthand: always / never
+      if (is_bool($definition)) {
+        $rules[] = [$definition ? Validator::ALWAYS : Validator::NEVER];
+        continue;
       }
-
-      if (is_string($rule)) {
-        if (Vars::typeCheck($value, $rule)) { continue; }
-        elseif (is_string($value)) {
-          try {
-            // @todo should we support $modifiers somehow?
-            //  `u` is implicit; can't imagine others would see much use.
-            if ((new Regex($rule))->matches($value)) { continue; }
-          } catch (\Throwable $e) {
-            // "not a regex" isn't a failure
-          }
-        }
-      }
-
-      return false;
     }
-    return true;
+
+    // apply all rules
+    return empty($rules) ? true : Validator::all(...$rules);
   }
 
 
@@ -269,7 +368,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/ArrayAccess.offsetExists
    */
   public function offsetExists($offset) : bool {
-    return in_array($offset, static::ENUM) ||
+    return in_array($offset, static::ENUMS ?? static::NAMES) ||
       method_exists($this, "get{$offset}");
   }
 
@@ -278,15 +377,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/ArrayAccess.offsetGet
    */
   public function offsetGet($offset) {
-    if (method_exists($this, "get{$offset}")) {
-      return $this->{"get{$offset}"}();
-    }
-
-    if (in_array($offset, static::ENUM)) {
-      return $this->_get($offset);
-    }
-
-    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['offset' => $offset]);
+    return $this->get($offset);
   }
 
   /**
@@ -294,19 +385,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/ArrayAccess.offsetSet
    */
   public function offsetSet($offset, $value) {
-    if (method_exists($this, "set{$offset}")) {
-      $this->{"set{$offset}"}($value);
-      return;
-    }
-
-    if (! $this->offsetValid($offset, $value)) {
-      throw new ModelableException(
-        ModelableException::INVALID_PROPERTY_VALUE,
-        ['offset' => $offset, 'value' => $value]
-      );
-    }
-
-    $this->_set($offset, $value);
+    $this->set($offset, $value);
   }
 
   /**
@@ -314,32 +393,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/ArrayAccess.offsetUnset
    */
   public function offsetUnset($offset) {
-    if (method_exists($this, "unset{$offset}")) {
-      $this->{"unset{$offset}"}();
-      return;
-    }
-
-    $this->offsetSet($offset, null);
-  }
-
-  /**
-   * {@inheritDoc}
-   * @see Modelable::offsetValid()
-   *
-   * validation process is as follows:
-   *  - uses declared validator (valid{property}())
-   *  - uses declared validation rules (static::DEFS[property]) if property is enumerable or settable
-   */
-  public function offsetValid(string $offset, $value) : bool {
-    if (method_exists($this, "valid{$offset}")) {
-      return $this->{"valid{$offset}"}($value, $flags);
-    }
-
-    if (in_array($offset, static::ENUM) || method_exists($this, "set{$offset}")) {
-      return $this->_valid($offset, $value);
-    }
-
-    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['offset' => $offset]);
+    $this->unset($offset);
   }
 
 
@@ -350,7 +404,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.current
    */
   public function current() {
-    return $this->offsetGet(current($this->_ENUM));
+    return $this->get(current($this->_ENUMS));
   }
 
   /**
@@ -358,7 +412,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.key
    */
   public function key() {
-    return current($this->_ENUM);
+    return current($this->_ENUMS);
   }
 
   /**
@@ -366,7 +420,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.next
    */
   public function next() {
-    next($this->_ENUM);
+    next($this->_ENUMS);
   }
 
   /**
@@ -374,10 +428,8 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.rewind
    */
   public function rewind() {
-    if (! $this->_ENUM) {
-      $this->_ENUM = static::ENUM;
-    }
-    reset($this->_ENUM);
+    $this->_ENUMS = static::ENUMS ?? static::NAMES;
+    reset($this->_ENUMS);
   }
 
   /**
@@ -385,7 +437,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Iterator.valid
    */
   public function valid() : bool {
-    return key($this->_ENUM) !== null;
+    return key($this->_ENUMS) !== null;
   }
 
 
@@ -423,7 +475,7 @@ abstract class Model implements Modelable {
    * @see http://php.net/Serializable.serialize
    */
   public function serialize() {
-    return serialize(array_map([$this, '_get'], static::VARS));
+    return serialize(array_map([$this, '_get'], static::NAMES));
   }
 
   /**
@@ -434,7 +486,7 @@ abstract class Model implements Modelable {
    */
   public function unserialize($serialized) {
     $data = unserialize($serialized);
-    if (array_keys($data) !== static::VARS) {
+    if (array_keys($data) !== static::NAMES) {
       throw new ModelableException(
         ModelableException::INVALID_SERIALIZATION,
         ['serialized' => $serialized]
