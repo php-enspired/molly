@@ -37,12 +37,36 @@ use at\util\Jsonable;
  * literal properties are actual values stored on the model.
  *
  * virtual properties can be accessed as if they are literal properties,
- * but their values are computed from one or more literal properties.
- * this calculation must be _deterministic_
- * (i.e., given the same literal properties, the same virtual property values will be returned).
+ * but their values are computed from literal properties.
+ * this allows implementations to expose different "views" on the literal properties.
+ * @example <code>
+ *  <?php
+ *
+ *  class ExampleModel implements Modelable {
+ *
+ *    // a literal property.
+ *    private $number = 5;
+ *
+ *    // a virtual property.
+ *    public function square() : int {
+ *      return $this->literal ** 2;
+ *    }
+ *
+ *    // simple example of a get() implementation.
+ *    public function get($property) {
+ *      switch ($property) {
+ *        case 'number': return $this->number;
+ *        case 'square': return $this->square();
+ *        // . . .
+ *      }
+ *    }
+ *  }
+ * </code>
+ *
+ * both literal and virtual properties may be enumerable, readable, and/or writable.
  *
  * whether properties are literal or virtual should be of little importance to outside code,
- * though may be important to for implementation details (e.g., deserializing, database storage).
+ * though may be important for implementation reasons (e.g., serializing, database storage).
  *
  * @method bool  ArrayAccess::offsetExists(string $offset)
  * @method mixed ArrayAccess::offsetGet(string $offset)

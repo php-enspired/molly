@@ -35,10 +35,6 @@ use at\util\ {
  * implementations declare the Model's schema and validation rules as class constants,
  * allowing most of the modelable logic to be handled by the base class.
  * in the simplest case, a child class can define a list of property names, and be done.
- *
- * the concept of "virtual" (computed) properties is also supported,
- * allowing the implementation to expose different "views" on the "literal" ("real") properties.
- * both literal and virtual properties may be enumerable, readable, writable, and/or validatable.
  */
 abstract class DeclarableModel implements Modelable {
 
@@ -340,7 +336,7 @@ abstract class DeclarableModel implements Modelable {
       if (is_array($definition)) {
         // shorthand: callable with additional args
         if (is_callable(reset($definition))) {
-          $rules[] = array_splice($definition, 1, 0, [$value]);
+          $rules[] = ArrayTools::splice($definition, 1, 0, [$value]);
           continue;
         }
 
@@ -428,7 +424,7 @@ abstract class DeclarableModel implements Modelable {
    * @see http://php.net/Iterator.rewind
    */
   public function rewind() {
-    $this->_ENUMS = static::ENUMS ?? static::NAMES;
+    $this->_ENUMS = $this->enumerableProperties();
     reset($this->_ENUMS);
   }
 
@@ -475,7 +471,11 @@ abstract class DeclarableModel implements Modelable {
    * @see http://php.net/Serializable.serialize
    */
   public function serialize() {
-    return serialize(array_map([$this, '_get'], static::NAMES));
+    $data = [];
+    foreach (static::NAMES as $property) {
+      $data[$property] = $this->_get($property);
+    }
+    return serialize($data);
   }
 
   /**
