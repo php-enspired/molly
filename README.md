@@ -1,3 +1,5 @@
+![](https://img.shields.io/badge/%E2%9A%A0-unreleased-red.svg?colorA=e05d44&colorB=e05d44)  ![](https://img.shields.io/badge/PHP-7.0-blue.svg?colorB=8892BF)  ![](https://img.shields.io/badge/license-GPL_3.0_only-blue.svg)
+
 molly
 =====
 
@@ -9,15 +11,15 @@ dependencies
 Requires:
 
 * php 7.0 or later
-* at\util 1.0 or later (`composer require php-enspired/util`)
+* utils 1.0 or later (`composer require php-enspired/util`)
   **note**, utils are currently **unreleased**.
 
 installation
 ------------
 
-_molly_ is currently **unreleased**.  It is **NOT RECOMMENDED FOR PRODUCTION USE**.
+_molly_ is currently **unreleased**.  It is **NOT FOR PRODUCTION USE**.
 
-Until it's ready, you'll have to clone it and manually `composer install` if you want to play around with it.
+Until it's ready, you'll have to clone it and manually `composer install` if you want to play around with it.  Note; you should not expect things to work at present.
 
 docs
 ----
