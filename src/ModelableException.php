@@ -24,14 +24,17 @@ use at\exceptable\Exception as Exceptable;
 
 class ModelableException extends Exceptable {
 
-  /** @type int  invalid property value. */
-  const INVALID_PROPERTY_VALUE = 2;
+  /**
+    * @type int INVALID_PROPERTY_VALUE
+    * @type int INVALID_SERIALIZATION
+    * @type int PROPERTY_NOT_READABLE
+    * @type int PROPERTY_NOT_WRITABLE
+    */
+  const INVALID_PROPERTY_VALUE = (1<<1);
+  const INVALID_SERIALIZATION = (1<<2);
+  const PROPERTY_NOT_READABLE = (1<<3);
+  const PROPERTY_NOT_WRITABLE = (1<<4);
 
-  /** @type int  invalid serialization. */
-  const INVALID_SERIALIZATION = 3;
-
-  /** @type int  no such property. */
-  const NO_SUCH_PROPERTY = 4;
 
   /** {@inheritDoc} @see Exceptable::INFO */
   const INFO = [
@@ -43,9 +46,13 @@ class ModelableException extends Exceptable {
     self::INVALID_SERIALIZATION => [
       'message' => 'invalid modelable serialization'
     ],
-    self::NO_SUCH_PROPERTY => [
-      'message' => 'no such property',
-      'tr_message' => 'no modelable property "{property}" exists'
+    self::PROPERTY_NOT_READABLE => [
+      'messgae' => 'property not readable',
+      'tr_message' => 'no readable property "{property}" exists'
+    ],
+    self::PROPERTY_NOT_WRITABLE => [
+      'messgae' => 'property not writable',
+      'tr_message' => 'no writable property "{property}" exists'
     ]
   ];
 }

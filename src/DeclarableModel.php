@@ -72,21 +72,26 @@ abstract class DeclarableModel implements Modelable {
   /**
    * @type string[]  list of literal property keys.
    *
-   * the implementing class *must* define names. the class will break otherwise.
+   * the implementing class *must* define names. it will break without them.
    */
-  const NAMES = null;
+  const NAMES = [];
 
-  /** @type string[]  instance copy of enumberable property keys. */
+  /**
+   * @type string[]  instance copy of enumberable property keys.
+   *
+   * @internal this *must* be treated as constant; it exists only as an implementation detail
+   * (to avoid sharing an array pointer between instances when iterating).
+   */
   private $_ENUMS;
 
   /**
-   * @property mixed $...
+   * @property mixed ${name}
    *
    * implementing classes should declare each of static::NAMES as a nonpublic instance property.
    */
 
   /**
-   * @method mixed get...(void)
+   * @method mixed get{name}(void)
    *
    * getters compute virtual property values from one or more literal properties.
    * this process *must* be deterministic.
@@ -95,7 +100,7 @@ abstract class DeclarableModel implements Modelable {
    */
 
   /**
-   * @method void set...(mixed $value)
+   * @method void set{name}(mixed $value)
    *
    * setters store values for both literal and virtual properties.
    * note, setters may modify values depending on how they are stored/represented internally.
@@ -109,15 +114,15 @@ abstract class DeclarableModel implements Modelable {
    */
 
   /**
-   * @method void unset...(void)
+   * @method void unset{name}(void)
    *
-   * unsetters restore values for both literal and virtual properties to an "empty"/"unset" state.
+   * unsetters restore values for literal or virtual properties to an "empty"/"unset" state.
    *
    * @throws ModelableException  if the property cannot be unset
    */
 
   /**
-   * @method bool valid...(mixed $value)
+   * @method bool valid{name}(mixed $value)
    *
    * validators apply custom validation logic when rules in DEFS would not be sufficient.
    *
@@ -131,14 +136,6 @@ abstract class DeclarableModel implements Modelable {
 
   /**
    * {@inheritDoc}
-   * @see Modelable::enumerableProperties()
-   */
-  public function enumerableProperties() : array {
-    return static::ENUMS ?? static::NAMES;
-  }
-
-  /**
-   * {@inheritDoc}
    * @see Modelable::equals()
    */
   public function equals(Modelable $other) : bool {
@@ -146,8 +143,8 @@ abstract class DeclarableModel implements Modelable {
       return false;
     }
 
-    foreach (static::KEYS as $key) {
-      if ($this->_get($key) !== $other->_get($key)) {
+    foreach (static::NAMES as $property) {
+      if ($this->_get($property) !== $other->_get($property)) {
         return false;
       }
     }
@@ -167,15 +164,22 @@ abstract class DeclarableModel implements Modelable {
       return $this->_get($property);
     }
 
-    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['property' => $property]);
+    throw new ModelableException(
+      ModelableException::PROPERTY_NOT_READABLE,
+      ['property' => $property]
+    );
   }
 
   /**
    * {@inheritDoc}
-   * @see Modelable::identifiableProperties()
+   * @see Modelable::identity()
    */
-  public function identifiableProperties() : array {
-    return static::KEYS;
+  public function identity() : array {
+    $identity = [];
+    foreach (static::KEYS as $key) {
+      $identity[$key] = $this->_get($key);
+    }
+    return $identity;
   }
 
   /**
@@ -225,7 +229,10 @@ abstract class DeclarableModel implements Modelable {
       return $this->_isValid($property, $value);
     }
 
-    throw new ModelableException(ModelableException::NO_SUCH_PROPERTY, ['property' => $property]);
+    throw new ModelableException(
+      ModelableException::PROPERTY_NOT_WRITABLE,
+      ['property' => $property]
+    );
   }
 
   /**
@@ -424,7 +431,7 @@ abstract class DeclarableModel implements Modelable {
    * @see http://php.net/Iterator.rewind
    */
   public function rewind() {
-    $this->_ENUMS = $this->enumerableProperties();
+    $this->_ENUMS = static::ENUMS ?? static::NAMES;
     reset($this->_ENUMS);
   }
 
