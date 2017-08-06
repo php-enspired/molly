@@ -122,7 +122,7 @@ abstract class DeclarableModel implements Modelable {
    */
 
   /**
-   * @method bool valid{name}(mixed $value)
+   * @method bool validate{name}(mixed $value)
    *
    * validators apply custom validation logic when rules in DEFS would not be sufficient.
    *
@@ -138,7 +138,7 @@ abstract class DeclarableModel implements Modelable {
    * {@inheritDoc}
    * @see Modelable::equals()
    */
-  public function equals(Modelable $other) : bool {
+  public function equals($other) : bool {
     if (empty(static::KEYS) || ! $other instanceof $this) {
       return false;
     }
@@ -211,32 +211,6 @@ abstract class DeclarableModel implements Modelable {
 
   /**
    * {@inheritDoc}
-   * @see Modelable::isValid()
-   *
-   * validation process is as follows:
-   *  - uses declared validator (valid{property}())
-   *  - uses declared validation rules (static::DEFS[property]) if property is enumerable or settable
-   */
-  public function isValid(string $property, $value) : bool {
-    if (method_exists($this, "isValid{$property}")) {
-      return $this->{"isValid{$property}"}($value, $flags);
-    }
-
-    if (
-      in_array($property, static::ENUMS ?? static::NAMES) ||
-      method_exists($this, "set{$property}")
-    ) {
-      return $this->_isValid($property, $value);
-    }
-
-    throw new ModelableException(
-      ModelableException::PROPERTY_NOT_WRITABLE,
-      ['property' => $property]
-    );
-  }
-
-  /**
-   * {@inheritDoc}
    * @see Modelable::set()
    */
   public function set(string $property, $value) {
@@ -245,7 +219,7 @@ abstract class DeclarableModel implements Modelable {
       return;
     }
 
-    if (! $this->offsetValid($property, $value)) {
+    if (! $this->validate($property, $value)) {
       throw new ModelableException(
         ModelableException::INVALID_PROPERTY_VALUE,
         ['property' => $property, 'value' => $value]
@@ -283,6 +257,32 @@ abstract class DeclarableModel implements Modelable {
     }
 
     $this->offsetSet($property, null);
+  }
+
+  /**
+   * {@inheritDoc}
+   * @see Modelable::validate()
+   *
+   * validation process is as follows:
+   *  - validator method, if defined
+   *  - validation rules, if property is enumerable or setable
+   */
+  public function validate(string $property, $value) : bool {
+    if (method_exists($this, "isValid{$property}")) {
+      return $this->{"isValid{$property}"}($value, $flags);
+    }
+
+    if (
+      in_array($property, static::ENUMS ?? static::NAMES) ||
+      method_exists($this, "set{$property}")
+    ) {
+      return $this->_validate($property, $value);
+    }
+
+    throw new ModelableException(
+      ModelableException::PROPERTY_NOT_WRITABLE,
+      ['property' => $property]
+    );
   }
 
   /**
@@ -324,7 +324,7 @@ abstract class DeclarableModel implements Modelable {
    * @param mixed  $value   value to validate
    * @return bool           true if value is valid; false otherwise
    */
-  protected function _isValid(string $property, $value) : bool {
+  protected function _validate(string $property, $value) : bool {
     $rules = [];
     foreach (static::RULES ?? [] as $definition) {
 
@@ -444,30 +444,14 @@ abstract class DeclarableModel implements Modelable {
   }
 
 
-  # Jsonable
+  # JsonSerializable
 
   /**
    * {@inheritDoc}
-   * @see Jsonable::jsonSerialize()
+   * @see JsonSerializable::jsonSerialize()
    */
   public function jsonSerialize() {
-    return $this->toArray();
-  }
-
-  /**
-   * {@inheritDoc}
-   * @see Jsonable::toArray()
-   */
-  public function toArray() : array {
     return iterator_to_array($this);
-  }
-
-  /**
-   * {@inheritDoc}
-   * @see Jsonable::toJson()
-   */
-  public function toJson() : string {
-    return Json::encode($this);
   }
 
 

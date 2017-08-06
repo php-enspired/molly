@@ -83,14 +83,12 @@ use at\util\Jsonable;
  * @method void   Iterator::rewind(void)
  * @method bool   Iterator::valid(void)
  *
- * @method array  Jsonable::jsonSerialize(void)
- * @method array  Jsonable::toArray(void)
- * @method string Jsonable::toJson(void)
+ * @method array  JsonSerializable::jsonSerialize(void)
  *
  * @method string Serializable::serialize(void)
- * @method void   Serializable::serialize(string $serialized)
+ * @method void   Serializable::unserialize(string $serialized)
  */
-interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
+interface Modelable extends ArrayAccess, Iterator, JsonSerializable, Serializable {
 
   /**
    * indicates the internal state of a Modelable instance.
@@ -141,16 +139,6 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
   public function identity() : array;
 
   /**
-   * validates a value for a given offset (property).
-   *
-   * @param string $property     offset (property) name
-   * @param mixed  $value        value to validate
-   * @throws ModelableException  if offset does not exist
-   * @return bool                true if value is valid; false otherwise
-   */
-  public function isValid(string $property, $value) : bool;
-
-  /**
    * sets the value of a writable property, i.e., one that has a setter or validator method.
    *
    * @param string $property     name of the property
@@ -175,4 +163,14 @@ interface Modelable extends ArrayAccess, Iterator, Jsonable, Serializable {
    * @throws ModelableException  if the property is not unsetable or does not exist
    */
   public function unset(string $property);
+
+  /**
+   * validates a value for a given offset (property).
+   *
+   * @param string $property     offset (property) name
+   * @param mixed  $value        value to validate
+   * @throws ModelableException  if offset does not exist
+   * @return bool                true if value is valid; false otherwise
+   */
+  public function validate(string $property, $value) : bool;
 }
