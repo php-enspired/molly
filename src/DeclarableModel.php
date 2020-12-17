@@ -256,7 +256,7 @@ abstract class DeclarableModel implements Modelable {
       return;
     }
 
-    $this->offsetSet($property, null);
+    $this->set($property, null);
   }
 
   /**
@@ -326,7 +326,7 @@ abstract class DeclarableModel implements Modelable {
    */
   protected function _validate(string $property, $value) : bool {
     $rules = [];
-    foreach (static::RULES ?? [] as $definition) {
+    foreach (static::RULES[$property] ?? [] as $definition) {
 
       // shorthand: callable with only value arg
       if (is_callable($definition)) {

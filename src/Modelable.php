@@ -51,7 +51,7 @@ use at\util\Jsonable;
  *
  *    // a virtual property.
  *    public function square() : int {
- *      return $this->literal ** 2;
+ *      return $this->number ** 2;
  *    }
  *
  *    // simplistic example of a get() implementation.
